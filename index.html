@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <!-- Basic Page Needs
+    -------------------------------------------------- -->
+    <meta charset="utf-8">
+    <title>GRAPS Gif Recorder</title>
+    <meta name="description" content="Homepage for the GRAPS Gif Recorder App">
+    <meta name="author" content="zalo">
+
+    <!-- Security
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' http://localhost https://fonts.gstatic.com https://fonts.googleapis.com https://api.github.com 'unsafe-inline'">
+    -------------------------------------------------- -->
+
+    <!-- Mobile Specific Metas
+    -------------------------------------------------- -->
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <!-- FONT
+    -------------------------------------------------- -->
+    <link href="https://fonts.googleapis.com/css?family=Raleway:400,300,600" rel="stylesheet" type="text/css">
+
+    <!-- CSS
+    -------------------------------------------------- -->
+    <link rel="stylesheet" href="/css/normalize.css">
+    <link rel="stylesheet" href="/css/skeleton.css">
+    <link rel="stylesheet" type="text/css" href="/css/main.css" />
+
+
+    <!-- Favicon
+    <link rel="icon" type="image/png" href="images/favicon.png">
+     -------------------------------------------------- -->
+  </head>
+
+  <body>
+    <!-- Primary Page Layout
+    -------------------------------------------------- -->
+    <div class="container">
+      <div class="row">
+        <div class="column" style="margin-top: 2.5%">
+          <h1>GRAPS</h1>
+      
+          <p>Record parts of your screen to gif.</p>
+            
+          <div style="display: inline-block;">FPS: <input id="frameRate" type="number" style="width:6em;" value="60" min="0" max="240" ></div>
+
+          <button id="start">Start Capture</button>
+          <div id='recordingOptions' class="inline hidden">
+              <button id="stop" class="inline">Stop Capture</button>
+              <button id="startRecord" class="inline">Start Recording</button>
+              <button id="endRecord" class="inline">Finish Recording</button>
+          </div>
+            
+          <div id='videocontainer' class='hidden' style="position:relative;border: #9999 1px solid;">
+            <div class='resizable'>
+              <div class='resizers'>
+                <div class='resizer top-left'></div>
+                <div class='resizer top-right'></div>
+                <div class='resizer bottom-left'></div>
+                <div class='resizer bottom-right'></div>
+              </div>
+            </div>
+
+            <video id="video" autoplay></video>
+          </div>
+          <br>
+
+          <div id='previews' class='hidden'>
+            <div id='previewContainer' style="display: inline-block; border: #9999 1px solid; width: auto;"><canvas id="imagePreviewCanvas"></canvas></div>
+            <div id='gifContainer'     style="display: inline-block; border: #9999 1px solid; width: auto;"></div>
+          </div>
+
+          <div class='hidden'>
+            <strong>Log:</strong>
+            <br>
+            <pre id="log"></pre>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- Add Scripts to the page
+    <script src="/js/utf8.js"></script>
+    -------------------------------------------------- -->
+    <script src="/js/gif.js"></script>
+
+    <script>
+        const videoElem     = document.getElementById("video");
+        const logElem       = document.getElementById("log");
+        const startElem     = document.getElementById("start");
+        const stopElem      = document.getElementById("stop");
+        const startRecElem  = document.getElementById("startRecord");
+        const endRecElem    = document.getElementById("endRecord");
+        const frameRateElem = document.getElementById("frameRate");
+        const resizableElem = document.getElementsByClassName("resizable")[0];
+        const recordingOpts = document.getElementById("recordingOptions");
+        const canvasElem    = document.getElementById('imagePreviewCanvas');
+        const gifElem       = document.getElementById('gifContainer');
+        const previewsElem  = document.getElementById('previews');
+        const ctx           = canvasElem.getContext('2d');
+
+        var lastTime = -1;
+        var capturing = false, recording = false;
+        var videoTrack = null, videoSettings = null;
+        var sourceX, sourceY, sourceWidth, sourceHeight;
+        var gif = null;
+
+        // Options for getDisplayMedia()
+        var displayMediaOptions = {
+          video: {
+              cursor: "never",
+              frameRate: frameRateElem.value
+          },
+          audio: false
+        };
+
+        // Set event listeners for the start and stop buttons
+        startElem    .addEventListener("click", function(evt) { startCapture();   }, false);
+        stopElem     .addEventListener("click", function(evt) { stopCapture();    }, false);
+        startRecElem .addEventListener("click", function(evt) { startRecording(); }, false);
+        endRecElem   .addEventListener("click", function(evt) { stopRecording();  }, false);
+        frameRateElem.addEventListener('change', (data) => { displayMediaOptions.video.frameRate = data.target.value; });
+        
+        async function startCapture() {
+            logElem.innerHTML = "";
+            try {
+                videoElem.srcObject = await navigator.mediaDevices.getDisplayMedia(displayMediaOptions);
+                startElem     .classList.add   ("hidden");
+                endRecElem    .classList.add   ("hidden");
+                recordingOpts .classList.remove("hidden");
+                resizableElem .classList.remove("hidden");
+                previewsElem  .classList.remove("hidden");
+                videoElem.parentElement.classList.remove("hidden");
+                capturing = true;
+                videoTrack = videoElem.srcObject.getVideoTracks()[0];
+                videoSettings = videoTrack.getSettings();
+                //dumpOptionsInfo(); // Add debug info...
+                repeatingGrabCroppedFrame();
+                if(!sourceX){
+                  makeResizableDiv('.resizable');
+                }
+            } catch(err) {
+                console.error("Error: " + err);
+            }
+        }
+        function startRecording() {
+          startRecElem.classList.add("hidden");
+          endRecElem.classList.remove("hidden");
+          stopElem.classList.add   ("hidden");
+          gif = new GIF({
+            workers: 2, quality: 30, dither: 'FloydSteinberg-serpentine',
+            width: sourceWidth, height: sourceHeight,
+            workerScript: 'js/gif.worker.js'
+          });
+          gif.on('finished', function(blob) {
+            gifElem.innerHTML = '<img src="'+URL.createObjectURL(blob)+'">'; //<h2>GIF: </h2>
+          });
+          recording = true;
+        }
+
+        function stopCapture(evt) {
+            stopRecording();
+            let tracks = videoElem.srcObject.getTracks();
+            tracks.forEach(track => track.stop());
+            videoElem.srcObject = null;
+            startElem    .classList.remove("hidden");
+            recordingOpts.classList.   add("hidden");
+            resizableElem.classList.   add("hidden");
+            stopElem     .classList.remove("hidden");
+            capturing = false;
+        }
+        function stopRecording() {
+          let tempRec = recording;
+          recording = false;
+          if(tempRec){
+            gif.render();
+          }
+          endRecElem  .classList.add   ("hidden");
+          startRecElem.classList.remove("hidden");
+          stopElem    .classList.remove("hidden");
+        }
+
+        function grabCroppedFrame(oneTime = false) {
+          ctx.drawImage(videoElem, sourceX, sourceY, sourceWidth, sourceHeight, 
+                                         0,       0, sourceWidth, sourceHeight);
+          if(!oneTime){
+            var time = videoElem.currentTime;
+            if (time !== lastTime && videoSettings) { // Prevents duplicates...
+              if(recording){ gif.addFrame(ctx, {delay: 1000/displayMediaOptions.video.frameRate, copy: true}); }
+              lastTime = time;
+              if(capturing){ setTimeout(repeatingGrabCroppedFrame, 4); }//requestAnimationFrame(repeatingGrabCroppedFrame); }
+            }else{
+              setTimeout(repeatingGrabCroppedFrame, 4);
+            }
+          }
+        }
+        var repeatingGrabCroppedFrame = ()=>grabCroppedFrame(false)
+
+        // Intercept messages to the console and add to the log
+        console.log   = (msg) => { logElem.classList.remove("hidden"); logElem.innerHTML += `${msg}<br>`;                           }
+        console.error = (msg) => { logElem.classList.remove("hidden"); logElem.innerHTML += `<span class="error">${msg}</span><br>`;}
+        console.warn  = (msg) => { logElem.classList.remove("hidden"); logElem.innerHTML += `<span class="warn"> ${msg}<span><br>`; }
+        console.info  = (msg) => { logElem.classList.remove("hidden"); logElem.innerHTML += `<span class="info"> ${msg}</span><br>`;}
+        function dumpOptionsInfo() {
+            console.info("Track settings:");
+            console.info(JSON.stringify(videoTrack.getSettings(), null, 2));
+            console.info("Track constraints:");
+            console.info(JSON.stringify(videoTrack.getConstraints(), null, 2));
+            console.info("Track capabilities:");
+            console.info(JSON.stringify(videoTrack.getCapabilities(), null, 2));
+        }
+
+        /*Make resizable div by Hung Nguyen*/
+        function makeResizableDiv(div) {
+          const element  = document.querySelector   (div);
+          const resizers = document.querySelectorAll(div + ' .resizer')
+          const minimum_size = 20;
+          let original_width = 0;
+          let original_height = 0;
+          let original_x = 0;
+          let original_y = 0;
+          let original_mouse_x = 0;
+          let original_mouse_y = 0;
+          let resizing = false;
+          element.style.left = (element.getBoundingClientRect().left - element.parentElement.getBoundingClientRect().left)+'px';
+          element.style.top  = (element.getBoundingClientRect().top - element.parentElement.getBoundingClientRect().top)+'px';
+
+          element.addEventListener('mousedown', function(e) {
+            if(resizing){ return; }
+            e.preventDefault();
+            window.addEventListener('mousemove', drag);
+            window.addEventListener('mouseup', stopDrag);
+            function drag(e) {
+              element.style.left = (parseFloat(element.style.left.replace('px', '')) + e.movementX) + 'px';
+              element.style.top  = (parseFloat(element.style.top .replace('px', '')) + e.movementY) + 'px';
+              writeData();
+            }
+            function stopDrag(e) {
+              window.removeEventListener('mousemove', drag);
+              window.removeEventListener('mouseup', stopDrag);
+            }
+          });
+
+          for (let i = 0;i < resizers.length; i++) {
+            const currentResizer = resizers[i];
+            currentResizer.addEventListener('mousedown', function(e) {
+              resizing = true;
+              e.preventDefault();
+              original_width  = parseFloat(getComputedStyle(element, null).getPropertyValue('width' ).replace('px', ''));
+              original_height = parseFloat(getComputedStyle(element, null).getPropertyValue('height').replace('px', ''));
+              original_x = element.getBoundingClientRect().left - element.parentElement.getBoundingClientRect().left;
+              original_y = element.getBoundingClientRect().top  - element.parentElement.getBoundingClientRect().top;
+              original_mouse_x = e.pageX;
+              original_mouse_y = e.pageY;
+              window.addEventListener('mousemove', resize);
+              window.addEventListener('mouseup', stopResize);
+            });
+            
+            function resize(e) {
+              if (currentResizer.classList.contains('bottom-right')) {
+                const width  = original_width  + (e.pageX - original_mouse_x);
+                const height = original_height + (e.pageY - original_mouse_y);
+                if (width > minimum_size) {
+                  element.style.width = width + 'px';
+                }
+                if (height > minimum_size) {
+                  element.style.height = height + 'px';
+                }
+              }
+              else if (currentResizer.classList.contains('bottom-left')) {
+                const width  = original_width  - (e.pageX - original_mouse_x);
+                const height = original_height + (e.pageY - original_mouse_y);
+                if (height > minimum_size) {
+                  element.style.height = height + 'px';
+                }
+                if (width > minimum_size) {
+                  element.style.width = width + 'px';
+                  element.style.left  = Math.max(original_x + (e.pageX - original_mouse_x), 0) + 'px';
+                }
+              }
+              else if (currentResizer.classList.contains('top-right')) {
+                const width  = original_width  + (e.pageX - original_mouse_x);
+                const height = original_height - (e.pageY - original_mouse_y);
+                if (width > minimum_size) {
+                  element.style.width = width + 'px';
+                }
+                if (height > minimum_size) {
+                  element.style.height = height + 'px';
+                  element.style.top = Math.max(original_y + (e.pageY - original_mouse_y), 0) + 'px';
+                }
+              }
+              else {
+                const width  = original_width  - (e.pageX - original_mouse_x);
+                const height = original_height - (e.pageY - original_mouse_y);
+                if (width > minimum_size) {
+                  element.style.width = width + 'px';
+                  element.style.left = Math.max(original_x + (e.pageX - original_mouse_x), 0) + 'px';
+                }
+                if (height > minimum_size) {
+                  element.style.height = height + 'px';
+                  element.style.top = Math.max(original_y + (e.pageY - original_mouse_y), 0) + 'px';
+                }
+              }
+              writeData();
+            }
+            
+            function stopResize() {
+              window.removeEventListener('mousemove', resize);
+              window.removeEventListener('mouseup', stopResize);
+              resizing = false;
+            }
+          }
+
+          function writeData(){
+            // Write out metadata for image extraction...
+            const cropRelativeX      = parseInt(getComputedStyle(element, null).getPropertyValue('left'  ).replace('px', ''))
+            const cropRelativeY      = parseInt(getComputedStyle(element, null).getPropertyValue('top'   ).replace('px', ''))
+            const cropRelativeWidth  = parseInt(getComputedStyle(element, null).getPropertyValue('width' ).replace('px', ''))
+            const cropRelativeHeight = parseInt(getComputedStyle(element, null).getPropertyValue('height').replace('px', ''))
+            const relativeWidth      = parseInt(getComputedStyle(element.parentElement, null).getPropertyValue('width' ).replace('px', ''))
+            const relativeHeight     = parseInt(getComputedStyle(element.parentElement, null).getPropertyValue('height').replace('px', ''))
+            const widthScalar  = videoElem.videoWidth /relativeWidth;
+            const heightScalar = videoElem.videoHeight/relativeHeight;
+            sourceX      = Math.round(cropRelativeX * widthScalar);
+            sourceY      = Math.round(cropRelativeY * heightScalar);
+            sourceWidth  = Math.round(cropRelativeWidth  * widthScalar);
+            sourceHeight = Math.round(cropRelativeHeight * heightScalar);
+            canvasElem.width  = sourceWidth;
+            canvasElem.height = sourceHeight;
+            grabCroppedFrame(true);
+          }
+          setTimeout(()=>{
+            resize({pageX:0, pageY: 0});
+            writeData();
+          }, 100);
+        }
+
+    </script>
+
+  <!-- End Document
+    -------------------------------------------------- -->
+  </body>
+</html>

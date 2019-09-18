@@ -1,0 +1,79 @@
+.inline {
+  display: inline-block;
+}
+
+.hidden {
+  display: none;
+}
+
+label {
+  margin-bottom: 10px;
+  display: block;
+}
+
+#video {
+  max-width: 100%;
+  height: auto;
+}
+
+.error {
+  color: red;
+}
+
+.warn {
+  color: orange;
+}
+
+.info {
+  color: darkgreen;
+}
+
+.resizable {
+  background: rgba(255, 255, 255, 0.445);
+  width: 100px;
+  height: 100px;
+  position: absolute;
+  top: 100px;
+  left: 100px;
+  z-index: 99 !important;
+  cursor: move;
+}
+
+.resizable .resizers{
+  width: 100%;
+  height: 100%;
+  border: 1px solid #4286f4;
+  box-sizing: border-box;
+  z-index: 99 !important;
+}
+
+.resizable .resizers .resizer{
+  width: 10px;
+  height: 10px;
+  border-radius: 50%; /*magic to turn square into circle*/
+  background: white;
+  border: 1px solid #4286f4;
+  position: absolute;
+  z-index: 99 !important;
+}
+
+.resizable .resizers .resizer.top-left {
+  left: -5px;
+  top: -5px;
+  cursor: nwse-resize; /*resizer cursor*/
+}
+.resizable .resizers .resizer.top-right {
+  right: -5px;
+  top: -5px;
+  cursor: nesw-resize;
+}
+.resizable .resizers .resizer.bottom-left {
+  left: -5px;
+  bottom: -5px;
+  cursor: nesw-resize;
+}
+.resizable .resizers .resizer.bottom-right {
+  right: -5px;
+  bottom: -5px;
+  cursor: nwse-resize;
+}
