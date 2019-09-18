@@ -1,2 +1,2 @@
-# gifcorder
+# [gifcorder](https://gifcorder.com/)
  A simple web-based gif recording tool
