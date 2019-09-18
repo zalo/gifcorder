@@ -4,8 +4,8 @@
     <!-- Basic Page Needs
     -------------------------------------------------- -->
     <meta charset="utf-8">
-    <title>GRAPS Gif Recorder</title>
-    <meta name="description" content="Homepage for the GRAPS Gif Recorder App">
+    <title>Gifcorder</title>
+    <meta name="description" content="Homepage for the Gifcorder app">
     <meta name="author" content="zalo">
 
     <!-- Security
@@ -165,9 +165,10 @@
             tracks.forEach(track => track.stop());
             videoElem.srcObject = null;
             startElem    .classList.remove("hidden");
+            stopElem     .classList.remove("hidden");
             recordingOpts.classList.   add("hidden");
             resizableElem.classList.   add("hidden");
-            stopElem     .classList.remove("hidden");
+            videoElem.parentElement.classList.add("hidden");
             capturing = false;
         }
         function stopRecording() {
