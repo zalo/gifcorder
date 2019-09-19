@@ -68,6 +68,7 @@
           <div id='previews' class='hidden'>
             <div id='previewContainer' style="display: inline-block; border: #9999 1px solid; width: auto;"><canvas id="imagePreviewCanvas"></canvas></div>
             <div id='gifContainer'     style="display: inline-block; border: #9999 1px solid; width: auto;"></div>
+            <!--<div id='apngContainer'    style="display: inline-block; border: #9999 1px solid; width: auto;"></div>-->
           </div>
 
           <div class='hidden'>
@@ -84,6 +85,7 @@
     <script src="/js/utf8.js"></script>
     -------------------------------------------------- -->
     <script src="/js/gif.js"></script>
+    <!--<script type="text/javascript" src="/js/canvas2apng.js"> </script> -->
 
     <script>
         const videoElem     = document.getElementById("video");
@@ -97,6 +99,7 @@
         const recordingOpts = document.getElementById("recordingOptions");
         const canvasElem    = document.getElementById('imagePreviewCanvas');
         const gifElem       = document.getElementById('gifContainer');
+        //const apngElem      = document.getElementById('apngContainer');
         const previewsElem  = document.getElementById('previews');
         const ctx           = canvasElem.getContext('2d');
 
@@ -148,18 +151,27 @@
           startRecElem.classList.add("hidden");
           endRecElem.classList.remove("hidden");
           stopElem.classList.add   ("hidden");
+
+          // Gif Support
           gif = new GIF({
-            workers: 2, quality: 30, dither: 'FloydSteinberg-serpentine',
+            workers: 4, quality: 30, dither: 'FloydSteinberg-serpentine',
             width: sourceWidth, height: sourceHeight,
             workerScript: 'js/gif.worker.js'
           });
+          console.log("Beginning Gif Encoding...")
           gif.on('finished', function(blob) {
             gifBlob = blob;
             if(gifURL) { URL.revokeObjectURL(gifURL); }
             gifURL = URL.createObjectURL(gifBlob);
             gifElem.innerHTML = '<a href="'+gifURL+'" download><img src="'+gifURL+'"></a>'; //<h2>GIF: </h2>
-
+            console.log("Gif Encoding Completed!")
           });
+
+          // APNG Support - Unable to get output pngs above 10fps
+          //apngEncoder = new APNGencoder(canvasElem);
+          //apngEncoder.start();
+          //apngEncoder.setDelay(100/displayMediaOptions.video.frameRate);
+
           recording = true;
         }
 
@@ -197,6 +209,11 @@
           recording = false;
           if(tempRec){
             gif.render();
+
+            //apngEncoder.finish();
+            //let base64Out = bytesToBase64(apngEncoder.stream().bin);
+            //let apngURL = "data:image/png;base64," + base64Out;
+            //apngElem.innerHTML = '<a href="'+apngURL+'" download><img src="'+apngURL+'"></a>';
           }
           endRecElem  .classList.add   ("hidden");
           startRecElem.classList.remove("hidden");
@@ -209,7 +226,10 @@
           if(!oneTime){
             var time = videoElem.currentTime;
             if (time !== lastTime && videoSettings) { // Prevents duplicates...
-              if(recording){ gif.addFrame(ctx, {delay: 1000/displayMediaOptions.video.frameRate, copy: true}); }
+              if(recording){
+                 gif.addFrame(ctx, {delay: 1000/displayMediaOptions.video.frameRate, copy: true}); 
+                 //apngEncoder.addFrame();
+              }
               lastTime = time;
               if(capturing){ setTimeout(repeatingGrabCroppedFrame, 4); }//requestAnimationFrame(repeatingGrabCroppedFrame); }
             }else{
