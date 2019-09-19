@@ -155,7 +155,7 @@
           // Gif Support
           gif = new GIF({
             workers: 4, quality: 30, dither: 'FloydSteinberg-serpentine',
-            width: sourceWidth, height: sourceHeight,
+            width: sourceWidth, height: sourceHeight,// globalPalette: true,
             workerScript: 'js/gif.worker.js'
           });
           console.log("Beginning Gif Encoding...")
