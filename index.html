@@ -38,7 +38,7 @@
     <div class="container">
       <div class="row">
         <div class="column" style="margin-top: 2.5%">
-          <a href="https://github.com/zalo/gifcorder" id="gifcorder"><h1>Gifcorder</h1></a>
+          <a href="https://github.com/zalo/gifcorder" id="gifcorder" style="text-decoration: none;"><h1>Gifcorder</h1></a>
       
           <p>Record parts of your screen to gif.</p>
             
@@ -67,7 +67,7 @@
           <br>
 
           <div id='previews' class='hidden'>
-            <div id='previewContainer' style="display: inline-block; border: #9999 1px solid; width: auto;"><canvas id="imagePreviewCanvas"></canvas></div>
+            <div id='previewContainer' style="display: inline-block; border: #9999 1px solid; width: auto;"><h4>Preview</h4><canvas id="imagePreviewCanvas" style="border: #9999 1px solid;"></canvas></div>
             <div id='gifContainer'     style="display: inline-block; border: #9999 1px solid; width: auto;"></div>
             <!--<div id='apngContainer'    style="display: inline-block; border: #9999 1px solid; width: auto;"></div>-->
           </div>
@@ -76,6 +76,7 @@
             <strong>Log:</strong>
             <br>
             <pre id="log"></pre>
+            <strong>Average Input Framerate:</strong><pre id="frameTime"></pre>
           </div>
 
         </div>
@@ -92,6 +93,7 @@
     <script>
         const videoElem     = document.getElementById("video");
         const logElem       = document.getElementById("log");
+        const frameTimeElem = document.getElementById("frameTime");
         const startElem     = document.getElementById("start");
         const stopElem      = document.getElementById("stop");
         const startRecElem  = document.getElementById("startRecord");
@@ -111,6 +113,7 @@
         var videoTrack = null, videoSettings = null;
         var sourceX, sourceY, sourceWidth, sourceHeight;
         var gif = null, gifURL = null, gifBlob = null;
+        var frameTimeNum = 0.016;
 
         // Options for getDisplayMedia()
         var displayMediaOptions = {
@@ -166,19 +169,18 @@
             gifBlob = blob;
             if(gifURL) { URL.revokeObjectURL(gifURL); }
             gifURL = URL.createObjectURL(gifBlob);
-            gifElem.innerHTML = '<a href="'+gifURL+'" download><img src="'+gifURL+'"></a>'; //<h2>GIF: </h2>
+            gifElem.innerHTML = '<h4>Gif</h4><a href="'+gifURL+'" download="gifcording-'+Date.now()+'.gif"><img style="border: #9999 1px solid;" src="'+gifURL+'"></a>';
             console.log("Gif Encoding Completed!")
-            console.log("Starting Gif Compression; currently "+ gifBlob.size/1048576 + " megabytes...");
+            console.log("Starting Gif Compression; currently "+ (gifBlob.size/1048576).toFixed(2) + "mb...");
 
             gifBlob.arrayBuffer().then(buffer =>{
-              //Module.TOTAL_MEMORY = 1073741824; // Set the available memory to a gigabyte... who knows what will happen?
               let compressedBuffer = gifmin(buffer, colorCntElem.value);
               if(compressedBuffer){
                 let newGifBlob = new Blob([compressedBuffer], {type: gifBlob.type});
                 if(gifURL) { URL.revokeObjectURL(gifURL); }
                 gifURL = URL.createObjectURL(newGifBlob);
-                gifElem.innerHTML = '<a href="'+gifURL+'" download><img src="'+gifURL+'"></a>';
-                console.log("Compression complete!  Now "+ compressedBuffer.byteLength/1048576 + " megabytes!");
+                gifElem.innerHTML = '<h4>Gif</h4><a href="'+gifURL+'" download="gifcording-'+Date.now()+'.gif"><img style="border: #9999 1px solid;" src="'+gifURL+'"></a>';
+                console.log("Compression complete!  Now "+ (compressedBuffer.byteLength/1048576).toFixed(2) + "mb!  Click your gif to download");
               }
             });
           });
@@ -191,6 +193,7 @@
           recording = true;
         }
 
+        // Clipboard support for direct pasting - unable to copy image/gif's...
         //gifElem.addEventListener("click", function(evt) {
         //  //let gifClipboardItem = new DataTransfer();
         //  //gifClipboardItem.items.add("image/gif", new File([gifBlob], "gifcording.gif"));
@@ -237,19 +240,29 @@
         }
 
         function grabCroppedFrame(oneTime = false) {
-          ctx.drawImage(videoElem, sourceX, sourceY, sourceWidth, sourceHeight, 
-                                         0,       0, sourceWidth, sourceHeight);
+          if(oneTime){
+            ctx.drawImage(videoElem, sourceX, sourceY, sourceWidth, sourceHeight, 
+                                          0,       0, sourceWidth, sourceHeight);
+          }
           if(!oneTime){
             var time = videoElem.currentTime;
             if (time !== lastTime && videoSettings) { // Prevents duplicates...
+              ctx.drawImage(videoElem, sourceX, sourceY, sourceWidth, sourceHeight, 
+                                             0,       0, sourceWidth, sourceHeight);
               if(recording){
                  gif.addFrame(ctx, {delay: 1000/displayMediaOptions.video.frameRate, copy: true}); 
                  //apngEncoder.addFrame();
               }
+
+              // Update the frame time estimate... this is suspiciously far away from the framerate...
+              frameTimeNum = Math.max(Math.min(frameTimeNum, 1.0), 0.002);
+              frameTimeNum += ((time - lastTime) - frameTimeNum) * 0.03;
+              frameTimeElem.innerText = 1.0/frameTimeNum + " fps";
+
               lastTime = time;
-              if(capturing){ setTimeout(repeatingGrabCroppedFrame, 4); }//requestAnimationFrame(repeatingGrabCroppedFrame); }
+              if(capturing){ setTimeout(repeatingGrabCroppedFrame, 1); }//requestAnimationFrame(repeatingGrabCroppedFrame); }//
             }else{
-              setTimeout(repeatingGrabCroppedFrame, 4);
+              setTimeout(repeatingGrabCroppedFrame, 1);
             }
           }
         }
@@ -290,8 +303,8 @@
             window.addEventListener('mousemove', drag);
             window.addEventListener('mouseup', stopDrag);
             function drag(e) {
-              element.style.left = (parseFloat(element.style.left.replace('px', '')) + e.movementX) + 'px';
-              element.style.top  = (parseFloat(element.style.top .replace('px', '')) + e.movementY) + 'px';
+              element.style.left = Math.max(0, (parseFloat(element.style.left.replace('px', '')) + e.movementX)) + 'px';
+              element.style.top  = Math.max(0, (parseFloat(element.style.top .replace('px', '')) + e.movementY)) + 'px';
               writeData();
             }
             function stopDrag(e) {
@@ -384,9 +397,13 @@
             sourceY      = Math.round(cropRelativeY * heightScalar);
             sourceWidth  = Math.round(cropRelativeWidth  * widthScalar);
             sourceHeight = Math.round(cropRelativeHeight * heightScalar);
-            canvasElem.width  = sourceWidth;
-            canvasElem.height = sourceHeight;
-            grabCroppedFrame(true);
+
+            // Small optimization: don't redraw unless the canvas has changed size...
+            if(canvasElem.width != sourceWidth || canvasElem.height != sourceHeight){
+              canvasElem.width  = sourceWidth;
+              canvasElem.height = sourceHeight;
+              grabCroppedFrame(true);
+            }
           }
           setTimeout(()=>{
             resize({pageX:0, pageY: 0});
