@@ -42,8 +42,9 @@
       
           <p>Record parts of your screen to gif.</p>
             
-          <div style="display: inline-block;">FPS: <input id="frameRate" type="number" style="width:6em;" value="60" min="0" max="240" ></div>
+          <div style="display: inline-block;">FPS: <input id="frameRate" type="number" style="width:6em;" value="30" min="0" max="240" ></div>
           <div style="display: inline-block;">Colors: <input id="colorCount" type="number" style="width:6em;" value="64" min="0" max="256" ></div>
+          <div style="display: inline-block;">Scale: <input id="outputScale" type="number" style="width:6em;" value="0.75" min="0" max="1" step=".01" ></div>
 
           <button id="start">Start Capture</button>
           <div id='recordingOptions' class="inline hidden">
@@ -100,6 +101,7 @@
         const endRecElem    = document.getElementById("endRecord");
         const frameRateElem = document.getElementById("frameRate");
         const colorCntElem  = document.getElementById("colorCount");
+        const outputSclElem = document.getElementById("outputScale");
         const resizableElem = document.getElementsByClassName("resizable")[0];
         const recordingOpts = document.getElementById("recordingOptions");
         const canvasElem    = document.getElementById('imagePreviewCanvas');
@@ -129,7 +131,7 @@
         stopElem     .addEventListener("click", function(evt) { stopCapture();    }, false);
         startRecElem .addEventListener("click", function(evt) { startRecording(); }, false);
         endRecElem   .addEventListener("click", function(evt) { stopRecording();  }, false);
-        frameRateElem.addEventListener('change', (data) => { displayMediaOptions.video.frameRate = data.target.value; });
+        frameRateElem.addEventListener('change', (data) => { stopCapture(); displayMediaOptions.video.frameRate = data.target.value; });
         
         async function startCapture() {
             logElem.innerHTML = "";
@@ -161,7 +163,8 @@
           // Gif Support
           gif = new GIF({
             workers: 4, quality: 30, dither: 'FloydSteinberg-serpentine',
-            width: sourceWidth, height: sourceHeight,// globalPalette: true,
+            width:  Math.round(sourceWidth  * outputSclElem.value), 
+            height: Math.round(sourceHeight * outputSclElem.value),// globalPalette: true,
             workerScript: 'js/gif.worker.js'
           });
           console.log("Beginning Gif Encoding...")
@@ -212,6 +215,7 @@
         //}, false);
 
         function stopCapture(evt) {
+          if(capturing){
             stopRecording();
             let tracks = videoElem.srcObject.getTracks();
             tracks.forEach(track => track.stop());
@@ -222,6 +226,7 @@
             resizableElem.classList.   add("hidden");
             videoElem.parentElement.classList.add("hidden");
             capturing = false;
+          }
         }
         function stopRecording() {
           let tempRec = recording;
@@ -241,16 +246,16 @@
 
         function grabCroppedFrame(oneTime = false) {
           if(oneTime){
-            ctx.drawImage(videoElem, sourceX, sourceY, sourceWidth, sourceHeight, 
-                                          0,       0, sourceWidth, sourceHeight);
+            ctx.drawImage(videoElem, sourceX, sourceY, sourceWidth,                       sourceHeight,
+                                           0,       0, sourceWidth * outputSclElem.value, sourceHeight * outputSclElem.value);
           }
           if(!oneTime){
             var time = videoElem.currentTime;
             if (time !== lastTime && videoSettings) { // Prevents duplicates...
-              ctx.drawImage(videoElem, sourceX, sourceY, sourceWidth, sourceHeight, 
-                                             0,       0, sourceWidth, sourceHeight);
+              ctx.drawImage(videoElem, sourceX, sourceY, sourceWidth,                       sourceHeight,
+                                             0,       0, sourceWidth * outputSclElem.value, sourceHeight * outputSclElem.value);
               if(recording){
-                 gif.addFrame(ctx, {delay: 1000/displayMediaOptions.video.frameRate, copy: true}); 
+                 gif.addFrame(ctx, {delay: 1000.0/displayMediaOptions.video.frameRate, copy: true}); 
                  //apngEncoder.addFrame();
               }
 
@@ -303,8 +308,8 @@
             window.addEventListener('mousemove', drag);
             window.addEventListener('mouseup', stopDrag);
             function drag(e) {
-              element.style.left = Math.max(0, (parseFloat(element.style.left.replace('px', '')) + e.movementX)) + 'px';
-              element.style.top  = Math.max(0, (parseFloat(element.style.top .replace('px', '')) + e.movementY)) + 'px';
+              element.style.left = Math.max(0, (parseFloat(element.style.left.replace('px', '')) + e.movementX/window.devicePixelRatio)) + 'px';
+              element.style.top  = Math.max(0, (parseFloat(element.style.top .replace('px', '')) + e.movementY/window.devicePixelRatio)) + 'px';
               writeData();
             }
             function stopDrag(e) {
@@ -399,9 +404,11 @@
             sourceHeight = Math.round(cropRelativeHeight * heightScalar);
 
             // Small optimization: don't redraw unless the canvas has changed size...
-            if(canvasElem.width != sourceWidth || canvasElem.height != sourceHeight){
-              canvasElem.width  = sourceWidth;
-              canvasElem.height = sourceHeight;
+            let tempWidth  = Math.round(sourceWidth  * outputSclElem.value);
+            let tempHeight = Math.round(sourceHeight * outputSclElem.value);
+            if(canvasElem.width !== tempWidth || canvasElem.height !== tempHeight){
+              canvasElem.width  = tempWidth;
+              canvasElem.height = tempHeight;
               grabCroppedFrame(true);
             }
           }
@@ -410,6 +417,7 @@
             writeData();
           }, 100);
           window.onresize = writeData;
+          outputSclElem.addEventListener('change', (data) => { writeData(); });
         }
 
     </script>
