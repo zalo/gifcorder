@@ -177,13 +177,12 @@
             console.log("Starting Gif Compression; currently "+ (gifBlob.size/1048576).toFixed(2) + "mb...");
 
             gifBlob.arrayBuffer().then(buffer =>{
-              let compressedBuffer = gifmin(buffer, colorCntElem.value);
-              if(compressedBuffer){
-                let newGifBlob = new Blob([compressedBuffer], {type: gifBlob.type});
-                if(gifURL) { URL.revokeObjectURL(gifURL); }
-                gifURL = URL.createObjectURL(newGifBlob);
-                gifElem.innerHTML = '<h4>Gif</h4><a href="'+gifURL+'" download="gifcording-'+Date.now()+'.gif"><img style="border: #9999 1px solid;" src="'+gifURL+'"></a>';
-                console.log("Compression complete!  Now "+ (compressedBuffer.byteLength/1048576).toFixed(2) + "mb!  Click your gif to download");
+              if (window.Worker) {
+                let gifsicleWorker = new Worker('/js/gif.min.worker.js');
+                gifsicleWorker.onmessage = (e) => { swapGif(e.data); }
+                gifsicleWorker.postMessage({ buffer: buffer, colors: colorCntElem.value });
+              }else{
+                swapGif(gifmin(buffer, colorCntElem.value));
               }
             });
           });
@@ -194,6 +193,16 @@
           //apngEncoder.setDelay(100/displayMediaOptions.video.frameRate);
 
           recording = true;
+        }
+
+        function swapGif(compressedBuffer){
+          if(compressedBuffer){
+            let newGifBlob = new Blob([compressedBuffer], {type: gifBlob.type});
+            if(gifURL) { URL.revokeObjectURL(gifURL); }
+            gifURL = URL.createObjectURL(newGifBlob);
+            gifElem.innerHTML = '<h4>Gif</h4><a href="'+gifURL+'" download="gifcording-'+Date.now()+'.gif"><img style="border: #9999 1px solid;" src="'+gifURL+'"></a>';
+            console.log("Compression complete!  Now "+ (compressedBuffer.byteLength/1048576).toFixed(2) + "mb!  Click your gif to download");
+          }
         }
 
         // Clipboard support for direct pasting - unable to copy image/gif's...
