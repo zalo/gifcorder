@@ -40,17 +40,18 @@
         <div class="column" style="margin-top: 2.5%">
           <a href="https://github.com/zalo/gifcorder" id="gifcorder" style="text-decoration: none;"><h1>Gifcorder</h1></a>
       
-          <p>Record parts of your screen to gif.</p>
+          <p>Record parts of your screen to gif and webm.</p>
             
-          <div style="display: inline-block;">FPS: <input id="frameRate" type="number" style="width:6em;" value="30" min="0" max="240" ></div>
-          <div style="display: inline-block;">Colors: <input id="colorCount" type="number" style="width:6em;" value="64" min="0" max="256" ></div>
+          <div style="display: inline-block;">FPS: <input id="frameRate" type="number" style="width:6em;" value="60" min="0" max="240" ></div>
           <div style="display: inline-block;">Scale: <input id="outputScale" type="number" style="width:6em;" value="0.75" min="0" max="1" step=".01" ></div>
+          <div style="display: inline-block;">Gif Colors: <input id="colorCount" type="number" style="width:6em;" value="64" min="0" max="256" ></div>
+          <div style="display: inline-block;">WebM Mbps: <input id="webmBitrate" type="number" style="width:7em;" value="2.5" min="0.1" max="10" step=".1" ></div>
 
           <button id="start">Start Capture</button>
-          <div id='recordingOptions' class="inline hidden">
-              <button id="stop" class="inline">Stop Capture</button>
+          <div id='recordingOptions'   class="inline hidden">
+              <button id="stop"        class="inline">Stop Capture</button>
               <button id="startRecord" class="inline">Start Recording</button>
-              <button id="endRecord" class="inline">Finish Recording</button>
+              <button id="endRecord"   class="inline">Finish Recording</button>
           </div>
             
           <div id='videocontainer' class='hidden' style="position:relative;border: #9999 1px solid;">
@@ -68,16 +69,18 @@
           <br>
 
           <div id='previews' class='hidden'>
-            <div id='previewContainer' style="display: inline-block; border: #9999 1px solid; width: auto;"><h4>Preview</h4><canvas id="imagePreviewCanvas" style="border: #9999 1px solid;"></canvas></div>
+            <div id='previewContainer' style="display: none;         border: #9999 1px solid; width: auto;"><h4>Preview</h4><canvas id="imagePreviewCanvas" style="border: #9999 1px solid;"></canvas></div>
+            <div id='webmContainer'    style="display: none;         border: #9999 1px solid; width: auto;"><h4>WebM</h4><video id="recordedWebM" style="border: #9999 1px solid;"></video></div>
             <div id='gifContainer'     style="display: inline-block; border: #9999 1px solid; width: auto;"></div>
             <!--<div id='apngContainer'    style="display: inline-block; border: #9999 1px solid; width: auto;"></div>-->
           </div>
 
           <div class='hidden'>
+            <br>
             <strong>Log:</strong>
             <br>
             <pre id="log"></pre>
-            <strong>Average Input Framerate:</strong><pre id="frameTime"></pre>
+            <!--<strong>Average Input Framerate:</strong><pre id="frameTime"></pre> -->
           </div>
 
         </div>
@@ -94,19 +97,23 @@
     <script>
         const videoElem     = document.getElementById("video");
         const logElem       = document.getElementById("log");
-        const frameTimeElem = document.getElementById("frameTime");
+        //const frameTimeElem = document.getElementById("frameTime");
         const startElem     = document.getElementById("start");
         const stopElem      = document.getElementById("stop");
         const startRecElem  = document.getElementById("startRecord");
         const endRecElem    = document.getElementById("endRecord");
         const frameRateElem = document.getElementById("frameRate");
         const colorCntElem  = document.getElementById("colorCount");
+        const bitrateElem   = document.getElementById("webmBitrate");
         const outputSclElem = document.getElementById("outputScale");
         const resizableElem = document.getElementsByClassName("resizable")[0];
         const recordingOpts = document.getElementById("recordingOptions");
         const canvasElem    = document.getElementById('imagePreviewCanvas');
         const gifElem       = document.getElementById('gifContainer');
+        const webmCntElem   = document.getElementById('webmContainer');
+        const webmElem      = document.getElementById('recordedWebM');
         //const apngElem      = document.getElementById('apngContainer');
+        const previewsCnt   = document.getElementById('previewContainer');
         const previewsElem  = document.getElementById('previews');
         const ctx           = canvasElem.getContext('2d');
 
@@ -116,6 +123,8 @@
         var sourceX, sourceY, sourceWidth, sourceHeight;
         var gif = null, gifURL = null, gifBlob = null;
         var frameTimeNum = 0.016;
+        var mediaRecorder = null; var recordedBlobs = [];
+        var supportedType = null; var stream = null;
 
         // Options for getDisplayMedia()
         var displayMediaOptions = {
@@ -139,26 +148,29 @@
                 videoElem.srcObject = await navigator.mediaDevices.getDisplayMedia(displayMediaOptions);
                 startElem     .classList.add   ("hidden");
                 endRecElem    .classList.add   ("hidden");
+                webmCntElem.style.display     = "none";
+                gifElem.innerHTML             = "";
                 recordingOpts .classList.remove("hidden");
                 resizableElem .classList.remove("hidden");
                 previewsElem  .classList.remove("hidden");
+                previewsCnt.style.display     = "inline-block";
                 videoElem.parentElement.classList.remove("hidden");
-                capturing = true;
-                videoTrack = videoElem.srcObject.getVideoTracks()[0];
+                capturing     = true;
+                videoTrack    = videoElem.srcObject.getVideoTracks()[0];
                 videoSettings = videoTrack.getSettings();
+                stream        = canvasElem.captureStream(frameRateElem.value);
                 //dumpOptionsInfo(); // Add debug info...
                 repeatingGrabCroppedFrame();
-                if(!sourceX){
-                  makeResizableDiv('.resizable');
-                }
+                if(!sourceX){ makeResizableDiv('.resizable'); }
             } catch(err) {
                 console.error("Error: " + err);
             }
         }
         function startRecording() {
-          startRecElem.classList.add("hidden");
-          endRecElem.classList.remove("hidden");
-          stopElem.classList.add   ("hidden");
+          lastTime = videoElem.currentTime;
+          startRecElem.classList.add   ("hidden");
+          stopElem    .classList.add   ("hidden");
+          endRecElem  .classList.remove("hidden");
 
           // Gif Support
           gif = new GIF({
@@ -192,6 +204,59 @@
           //apngEncoder.start();
           //apngEncoder.setDelay(100/displayMediaOptions.video.frameRate);
 
+          // WebM Support - Here we go...
+          // The following is filched from: https://github.com/SMUsamaShah/CanvasRecorder
+          {
+            let types = [
+                'video/webm,codecs=vp9',
+                'video/webm,codecs=vp8',
+                "video/webm",
+                'video/vp8',
+                "video/webm\;codecs=daala",
+                "video/webm\;codecs=h264",
+                "video/mpeg"
+            ];
+
+            for (let i in types) {
+                if (MediaRecorder.isTypeSupported(types[i])) {
+                    supportedType = types[i];
+                    break;
+                }
+            }
+            if (supportedType == null) {
+                console.error("Error: No supported type found for MediaRecorder");
+            }
+            let options = { 
+                mimeType: supportedType,
+                videoBitsPerSecond: bitrateElem.value * 1000000
+            };
+
+            recordedBlobs = [];
+            try {
+                mediaRecorder = new MediaRecorder(stream, options);
+            } catch (e) {
+                alert('MediaRecorder is not supported by this browser.');
+                console.error('Exception while creating MediaRecorder:', e);
+                return;
+            }
+
+            mediaRecorder.onstop = (event) => {
+              const superBuffer = new Blob(recordedBlobs, { type: supportedType });
+              webmElem.src = window.URL.createObjectURL(superBuffer);
+              webmElem.controls = true;
+              webmElem.loop = true;
+              webmElem.disablePictureInPicture = true;
+              webmElem.play();
+              webmCntElem.style.display = 'inline-block';
+            };
+            mediaRecorder.ondataavailable = (event) => {
+              if (recording && event.data && event.data.size > 0) {
+                recordedBlobs.push(event.data);
+              }
+            };
+            mediaRecorder.start(100); // collect 100ms of data blobs
+          }
+
           recording = true;
         }
 
@@ -205,24 +270,6 @@
           }
         }
 
-        // Clipboard support for direct pasting - unable to copy image/gif's...
-        //gifElem.addEventListener("click", function(evt) {
-        //  //let gifClipboardItem = new DataTransfer();
-        //  //gifClipboardItem.items.add("image/gif", new File([gifBlob], "gifcording.gif"));
-        //  navigator.permissions.query({ name: 'clipboard-write' }).then(result => {
-        //    if (result.state === 'granted') {
-        //      let gifClipboardItem = new ClipboardItem({'image/gif': gifBlob});
-        //      navigator.clipboard.write([gifClipboardItem]).then(function() {
-        //        console.log("Copied your gif to the clipboard!");
-        //      }, function(error) {
-        //        console.error(error);
-        //      });
-        //    } else {
-        //      console.error("clipboard-permission not granted: " + result);
-        //    }
-        //  });
-        //}, false);
-
         function stopCapture(evt) {
           if(capturing){
             stopRecording();
@@ -233,24 +280,28 @@
             stopElem     .classList.remove("hidden");
             recordingOpts.classList.   add("hidden");
             resizableElem.classList.   add("hidden");
+            previewsCnt.style.display = 'none';
             videoElem.parentElement.classList.add("hidden");
             capturing = false;
           }
         }
         function stopRecording() {
-          let tempRec = recording;
-          recording = false;
-          if(tempRec){
-            gif.render();
-
-            //apngEncoder.finish();
-            //let base64Out = bytesToBase64(apngEncoder.stream().bin);
-            //let apngURL = "data:image/png;base64," + base64Out;
-            //apngElem.innerHTML = '<a href="'+apngURL+'" download><img src="'+apngURL+'"></a>';
+          if(recording){
+            let tempRec = recording;
+            recording = false;
+            if(tempRec){
+              mediaRecorder.stop();
+              gif.render();
+              stopCapture();
+              //apngEncoder.finish();
+              //let base64Out = bytesToBase64(apngEncoder.stream().bin);
+              //let apngURL = "data:image/png;base64," + base64Out;
+              //apngElem.innerHTML = '<a href="'+apngURL+'" download><img src="'+apngURL+'"></a>';
+            }
+            endRecElem  .classList.add   ("hidden");
+            startRecElem.classList.remove("hidden");
+            stopElem    .classList.remove("hidden");
           }
-          endRecElem  .classList.add   ("hidden");
-          startRecElem.classList.remove("hidden");
-          stopElem    .classList.remove("hidden");
         }
 
         function grabCroppedFrame(oneTime = false) {
@@ -260,24 +311,26 @@
           }
           if(!oneTime){
             var time = videoElem.currentTime;
-            if (time !== lastTime && videoSettings) { // Prevents duplicates...
+            //if (time !== lastTime && videoSettings) { // Prevents duplicates...
               ctx.drawImage(videoElem, sourceX, sourceY, sourceWidth,                       sourceHeight,
                                              0,       0, sourceWidth * outputSclElem.value, sourceHeight * outputSclElem.value);
-              if(recording){
-                 gif.addFrame(ctx, {delay: 1000.0/displayMediaOptions.video.frameRate, copy: true}); 
+              
+              let roundedDelay = Math.round(100.0/displayMediaOptions.video.frameRate)/100.0; // gifs only do multiples of 10ms...
+              if(recording){// && (time - lastTime) > roundedDelay){
+                 gif.addFrame(ctx, {delay: roundedDelay*1000, copy: true});
                  //apngEncoder.addFrame();
+                 //lastTime += roundedDelay;
               }
 
               // Update the frame time estimate... this is suspiciously far away from the framerate...
-              frameTimeNum = Math.max(Math.min(frameTimeNum, 1.0), 0.002);
-              frameTimeNum += ((time - lastTime) - frameTimeNum) * 0.03;
-              frameTimeElem.innerText = 1.0/frameTimeNum + " fps";
+              //frameTimeNum = Math.max(Math.min(frameTimeNum, 1.0), 0.002);
+              //frameTimeNum += ((time - lastTime) - frameTimeNum) * 0.03;
+              //frameTimeElem.innerText = 1.0/frameTimeNum + " fps";
 
-              lastTime = time;
-              if(capturing){ setTimeout(repeatingGrabCroppedFrame, 1); }//requestAnimationFrame(repeatingGrabCroppedFrame); }//
-            }else{
-              setTimeout(repeatingGrabCroppedFrame, 1);
-            }
+              if(capturing){ requestAnimationFrame(repeatingGrabCroppedFrame); }//setTimeout(repeatingGrabCroppedFrame, 1); }//
+            //}else{
+            //  setTimeout(repeatingGrabCroppedFrame, 1);
+            //}
           }
         }
         var repeatingGrabCroppedFrame = ()=>grabCroppedFrame(false)
