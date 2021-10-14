@@ -22,9 +22,9 @@
 
     <!-- CSS
     -------------------------------------------------- -->
-    <link rel="stylesheet" href="/css/normalize.css">
-    <link rel="stylesheet" href="/css/skeleton.css">
-    <link rel="stylesheet" type="text/css" href="/css/main.css" />
+    <link rel="stylesheet" href="/gifcorder/css/normalize.css">
+    <link rel="stylesheet" href="/gifcorder/css/skeleton.css">
+    <link rel="stylesheet" type="text/css" href="/gifcorder/css/main.css" />
 
 
     <!-- Favicon
@@ -88,11 +88,11 @@
     </div>
 
     <!-- Add Scripts to the page
-    <script src="/js/utf8.js"></script>
+    <script src="/gifcorder/js/utf8.js"></script>
     -------------------------------------------------- -->
-    <script src="/js/gif.js"></script>
-    <script src="/js/gif.min.js"></script>
-    <!--<script type="text/javascript" src="/js/canvas2apng.js"> </script> -->
+    <script src="/gifcorder/js/gif.js"></script>
+    <script src="/gifcorder/js/gif.min.js"></script>
+    <!--<script type="text/javascript" src="/gifcorder/js/canvas2apng.js"> </script> -->
 
     <script>
         const videoElem     = document.getElementById("video");
@@ -177,7 +177,7 @@
             workers: 4, quality: 30, dither: 'FloydSteinberg-serpentine',
             width:  Math.round(sourceWidth  * outputSclElem.value), 
             height: Math.round(sourceHeight * outputSclElem.value),// globalPalette: true,
-            workerScript: 'js/gif.worker.js'
+            workerScript: 'gifcorder/js/gif.worker.js'
           });
           console.log("Beginning Gif Encoding...")
           gif.on('finished', function(blob) {
@@ -190,7 +190,7 @@
 
             gifBlob.arrayBuffer().then(buffer =>{
               if (window.Worker) {
-                let gifsicleWorker = new Worker('/js/gif.min.worker.js');
+                let gifsicleWorker = new Worker('/gifcorder/js/gif.min.worker.js');
                 gifsicleWorker.onmessage = (e) => { swapGif(e.data); }
                 gifsicleWorker.postMessage({ buffer: buffer, colors: colorCntElem.value });
               }else{

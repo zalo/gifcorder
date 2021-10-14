@@ -1,4 +1,4 @@
-# [Gifcorder](https://gifcorder.com/)
+# [Gifcorder](https://zalo.github.io/gifcorder/)
  A simple web-based gif/webm recording tool
 
 ## Credits
