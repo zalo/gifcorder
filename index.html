@@ -177,7 +177,7 @@
             workers: 4, quality: 30, dither: 'FloydSteinberg-serpentine',
             width:  Math.round(sourceWidth  * outputSclElem.value), 
             height: Math.round(sourceHeight * outputSclElem.value),// globalPalette: true,
-            workerScript: 'gifcorder/js/gif.worker.js'
+            workerScript: '/gifcorder/js/gif.worker.js'
           });
           console.log("Beginning Gif Encoding...")
           gif.on('finished', function(blob) {
